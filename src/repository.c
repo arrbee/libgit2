@@ -119,21 +119,30 @@ static int check_repository_dirs(git_repository *repo)
 
 static int guess_repository_dirs(git_repository *repo, const char *repository_path)
 {
-	char buffer[GIT_PATH_MAX];
+    git_path path = GIT_PATH_INIT;
 	const char *path_work_tree = NULL;
+	int error = GIT_SUCCESS;
 
 	/* Git directory name */
-	if (git_path_basename_r(buffer, sizeof(buffer), repository_path) < 0)
+	if (git_path_basename_r(&path, repository_path) < 0) {
+        git_path_free(&path);
 		return git__throw(GIT_EINVALIDPATH, "Unable to parse folder name from `%s`", repository_path);
+    }
 
-	if (strcmp(buffer, DOT_GIT) == 0) {
+	if (strcmp(path.data, DOT_GIT) == 0) {
 		/* Path to working dir */
-		if (git_path_dirname_r(buffer, sizeof(buffer), repository_path) < 0)
+		if (git_path_dirname_r(&path, repository_path) < 0) {
+            git_path_free(&path);
 			return git__throw(GIT_EINVALIDPATH, "Unable to parse parent folder name from `%s`", repository_path);
-		path_work_tree = buffer;
+        }
+		path_work_tree = path.data;
 	}
 
-	return assign_repository_dirs(repo, repository_path, NULL, NULL, path_work_tree);
+    error = assign_repository_dirs(repo, repository_path, NULL, NULL, path_work_tree);
+
+    git_path_free(&path);
+
+    return error;
 }
 
 static int quickcheck_repository_dir(const char *repository_path)
@@ -491,7 +500,7 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 {
 	int error, ceiling_offset;
 	char bare_path[GIT_PATH_MAX];
-	char normal_path[GIT_PATH_MAX];
+    git_path normal_path = GIT_PATH_INIT_N(GIT_PATH_MAX);
 	char *found_path;
 	dev_t current_device = 0;
 
@@ -508,23 +517,23 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 	}
 
 	ceiling_offset = retrieve_ceiling_directories_offset(bare_path, ceiling_dirs);
-	git_path_join(normal_path, bare_path, DOT_GIT);
+	git_path_join(normal_path.data, bare_path, DOT_GIT);
 
 	while(1) {
 		/**
 		 * If the `.git` file is regular instead of
 		 * a directory, it should contain the path of the actual git repository
 		 */
-		if (git_futils_isfile(normal_path) == GIT_SUCCESS) {
-			error = read_gitfile(repository_path, normal_path, bare_path);
+		if (git_futils_isfile(normal_path.data) == GIT_SUCCESS) {
+			error = read_gitfile(repository_path, normal_path.data, bare_path);
 
 			if (error < GIT_SUCCESS)
-				return git__rethrow(error, "Unable to read git file `%s`", normal_path);
+				return git__rethrow(error, "Unable to read git file `%s`", normal_path.data);
 
 			error = quickcheck_repository_dir(repository_path);
 			if (error < GIT_SUCCESS)
 				return git__throw(GIT_ENOTFOUND, "The `.git` file found at '%s' points"
-					"to an inexisting Git folder", normal_path);
+					"to an inexisting Git folder", normal_path.data);
 
 			return GIT_SUCCESS;
 		}
@@ -532,10 +541,10 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 		/**
 		 * If the `.git` file is a folder, we check inside of it
 		 */
-		if (git_futils_isdir(normal_path) == GIT_SUCCESS) {
-			error = quickcheck_repository_dir(normal_path);
+		if (git_futils_isdir(normal_path.data) == GIT_SUCCESS) {
+			error = quickcheck_repository_dir(normal_path.data);
 			if (error == GIT_SUCCESS) {
-				found_path = normal_path;
+				found_path = normal_path.data;
 				break;
 			}
 		}
@@ -550,12 +559,12 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 			break;
 		}
 
-		if (git_path_dirname_r(normal_path, sizeof(normal_path), bare_path) < GIT_SUCCESS)
+		if (git_path_dirname_r(&normal_path, bare_path) < GIT_SUCCESS)
 			return git__throw(GIT_EOSERR, "Failed to dirname '%s'", bare_path);
 
 		if (!across_fs) {
 			dev_t new_device;
-			error = retrieve_device(&new_device, normal_path);
+			error = retrieve_device(&new_device, normal_path.data);
 
 			if (error < GIT_SUCCESS || current_device != new_device) {
 				return git__throw(GIT_ENOTAREPO,"Not a git repository (or any parent up to mount parent %s)\n"
@@ -564,8 +573,8 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 			current_device = new_device;
 		}
 
-		strcpy(bare_path, normal_path);
-		git_path_join(normal_path, bare_path, DOT_GIT);
+		strcpy(bare_path, normal_path.data);
+		git_path_join(normal_path.data, bare_path, DOT_GIT);
 
 		// nothing has been found, lets try the parent directory
 		if (bare_path[ceiling_offset] == '\0') {
@@ -578,6 +587,9 @@ int git_repository_discover(char *repository_path, size_t size, const char *star
 	}
 
 	git_path_join(repository_path, found_path, "");
+
+    git_path_free(&normal_path);
+
 	return GIT_SUCCESS;
 }
 

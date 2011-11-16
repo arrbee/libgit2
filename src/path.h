@@ -19,8 +19,10 @@ typedef struct { /* path buffer */
 	size_t size;
 } git_path;
 
-#define GIT_PATH_INIT {NULL,0}
-#define GIT_PATH_INIT_STR(S) {(S)?git__strdup(S):NULL,(S)?strlen(S):0}
+#define GIT_PATH_INIT			{NULL,0}
+#define GIT_PATH_INIT_STR(S)	{(S)?git__strdup(S):NULL,(S)?strlen(S):0}
+/* the ability to prealloc a git_path is useful while transitioning code */
+#define GIT_PATH_INIT_N(N)		{(N)>0?git__calloc(N,1):NULL,N}
 
 extern void git_path_free(git_path *path);
 extern void git_path_expand(git_path *path, size_t newsize);
@@ -53,7 +55,7 @@ GIT_INLINE(void) git_path_append(git_path *tgt, const git_path *src)
  * object which will be (re-)allocated as needed to be big enough.
  */
 extern char *git_path_dirname(const char *path);
-extern int git_path_dirname_r(char *buffer, size_t bufflen, const char *path);
+extern int git_path_dirname_r(git_path *parent_path, const char *path);
 
 /*
  * This function returns the basename of the file, which is the last
@@ -67,11 +69,11 @@ extern int git_path_dirname_r(char *buffer, size_t bufflen, const char *path);
  * The `git_path_basename` implementation is thread safe. The returned
  * string must be manually free'd.
  *
- * The `git_path_basename_r` implementation expects a string allocated
- * by the user with big enough size.
+ * The `git_path_basename_r` implementation expects an initialized git_path
+ * object which will be (re-)allocated as needed to be big enough.
  */
 extern char *git_path_basename(const char *path);
-extern int git_path_basename_r(char *buffer, size_t bufflen, const char *path);
+extern int git_path_basename_r(git_path *base_path, const char *path);
 
 extern const char *git_path_topdir(const char *path);
 

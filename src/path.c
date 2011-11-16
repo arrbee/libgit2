@@ -15,7 +15,9 @@
 void git_path_free(git_path *path)
 {
 	assert(path);
-	git__free(path->data);
+    if (path->data) {
+        git__free(path->data);
+    }
 	path->data = NULL;
 	path->size = 0;
 }
@@ -52,7 +54,7 @@ void git_path_strncat(git_path *path, const char* str, size_t n)
 	}
 
 	if (add_size > 0) {
-		memcpy(path->data + old_size, str, add_size);
+		memmove(path->data + old_size, str, add_size);
 
 		/* make sure to terminate new string */
 		*(path->data + old_size + add_size + 1) = '\0';
@@ -63,7 +65,8 @@ void git_path_strncat(git_path *path, const char* str, size_t n)
  * Based on the Android implementation, BSD licensed.
  * Check http://android.git.kernel.org/
  */
-int git_path_basename_r(char *buffer, size_t bufflen, const char *path)
+int git_path_basename_r(git_path *base_path, const char *path)
+/* int git_path_basename_r(char *buffer, size_t bufflen, const char *path) */
 {
 	const char *endp, *startp;
 	int len, result;
@@ -96,17 +99,16 @@ int git_path_basename_r(char *buffer, size_t bufflen, const char *path)
 
 Exit:
 	result = len;
-	if (buffer == NULL) {
+	if (base_path == NULL) {
 		return result;
 	}
-	if (len > (int)bufflen-1) {
-		len	= (int)bufflen-1;
-		result = GIT_ENOMEM;
+	if (len > (int)base_path->size - 1) {
+        git_path_expand(base_path, len + 1);
 	}
 
 	if (len >= 0) {
-		memmove(buffer, startp, len);
-		buffer[len] = 0;
+		memmove(base_path->data, startp, len);
+		base_path->data[len] = 0;
 	}
 	return result;
 }
@@ -115,7 +117,7 @@ Exit:
  * Based on the Android implementation, BSD licensed.
  * Check http://android.git.kernel.org/
  */
-int git_path_dirname_r(char *buffer, size_t bufflen, const char *path)
+int git_path_dirname_r(git_path* parent_path, const char *path)
 {
 	const char *endp;
 	int result, len;
@@ -164,17 +166,16 @@ Exit:
 	if (len+1 > GIT_PATH_MAX) {
 		return GIT_ENOMEM;
 	}
-	if (buffer == NULL)
+	if (parent_path == NULL)
 		return result;
 
-	if (len > (int)bufflen-1) {
-		len	= (int)bufflen-1;
-		result = GIT_ENOMEM;
+	if (len > (int)parent_path->size - 1) {
+        git_path_expand(parent_path, len + 1);
 	}
 
 	if (len >= 0) {
-		memmove(buffer, path, len);
-		buffer[len] = 0;
+		memmove(parent_path->data, path, len);
+		parent_path->data[len] = 0;
 	}
 	return result;
 }
@@ -182,38 +183,26 @@ Exit:
 
 char *git_path_dirname(const char *path)
 {
-	char *dname = NULL;
-	int len;
+    git_path dname = GIT_PATH_INIT;
 
-	len = (path ? strlen(path) : 0) + 2;
-	dname = (char *)git__malloc(len);
-	if (dname == NULL)
-		return NULL;
-
-	if (git_path_dirname_r(dname, len, path) < GIT_SUCCESS) {
-		git__free(dname);
+	if (git_path_dirname_r(&dname, path) < GIT_SUCCESS) {
+		git_path_free(&dname);
 		return NULL;
 	}
 
-	return dname;
+	return dname.data;
 }
 
 char *git_path_basename(const char *path)
 {
-	char *bname = NULL;
-	int len;
+    git_path bname = GIT_PATH_INIT;
 
-	len = (path ? strlen(path) : 0) + 2;
-	bname = (char *)git__malloc(len);
-	if (bname == NULL)
-		return NULL;
-
-	if (git_path_basename_r(bname, len, path) < GIT_SUCCESS) {
-		git__free(bname);
+	if (git_path_basename_r(&bname, path) < GIT_SUCCESS) {
+		git_path_free(&bname);
 		return NULL;
 	}
 
-	return bname;
+	return bname.data;
 }
 
 

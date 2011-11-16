@@ -11,21 +11,25 @@
 int git_futils_mkpath2file(const char *file_path, const mode_t mode)
 {
 	int error = GIT_SUCCESS;
-	char target_folder_path[GIT_PATH_MAX];
+    git_path target_folder = GIT_PATH_INIT_N(GIT_PATH_MAX); /* prealloc during transition to git_path */
 
-	error = git_path_dirname_r(target_folder_path, sizeof(target_folder_path), file_path);
+	error = git_path_dirname_r(&target_folder, file_path);
 	if (error < GIT_SUCCESS)
 		return git__throw(GIT_EINVALIDPATH, "Failed to recursively build `%s` tree structure. Unable to parse parent folder name", file_path);
 
 	/* Does the containing folder exist? */
-	if (git_futils_isdir(target_folder_path)) {
-		git_path_join(target_folder_path, target_folder_path, ""); /* Ensure there's a trailing slash */
+	if (git_futils_isdir(target_folder.data)) {
+		git_path_join(target_folder.data, target_folder.data, ""); /* Ensure there's a trailing slash */
 
 		/* Let's create the tree structure */
-		error = git_futils_mkdir_r(target_folder_path, mode);
-		if (error < GIT_SUCCESS)
+		error = git_futils_mkdir_r(target_folder.data, mode);
+		if (error < GIT_SUCCESS) {
+            git_path_free(&target_folder);
 			return error;	/* The callee already takes care of setting the correct error message. */
+        }
 	}
+
+    git_path_free(&target_folder);
 
 	return GIT_SUCCESS;
 }

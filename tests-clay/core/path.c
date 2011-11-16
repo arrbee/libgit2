@@ -4,26 +4,30 @@
 static void
 check_dirname(const char *A, const char *B)
 {
-	char dir[64], *dir2;
+    git_path dir = GIT_PATH_INIT;
+	char *dir2;
 
-	cl_assert(git_path_dirname_r(dir, sizeof(dir), A) >= 0);
-	cl_assert(strcmp(dir, B) == 0);
+	cl_assert(git_path_dirname_r(&dir, A) >= 0);
+	cl_assert(strcmp(dir.data, B) == 0);
+    git_path_free(&dir);
+
 	cl_assert((dir2 = git_path_dirname(A)) != NULL);
 	cl_assert(strcmp(dir2, B) == 0);
-
 	git__free(dir2);
 }
 
 static void
 check_basename(const char *A, const char *B)
 {
-	char base[64], *base2;
+    git_path base = GIT_PATH_INIT;
+	char *base2;
 
-	cl_assert(git_path_basename_r(base, sizeof(base), A) >= 0);
-	cl_assert(strcmp(base, B) == 0);
+	cl_assert(git_path_basename_r(&base, A) >= 0);
+	cl_assert(strcmp(base.data, B) == 0);
+    git_path_free(&base);
+
 	cl_assert((base2 = git_path_basename(A)) != NULL);
 	cl_assert(strcmp(base2, B) == 0);
-
 	git__free(base2);
 }
 
