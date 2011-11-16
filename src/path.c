@@ -12,17 +12,17 @@
 #include <stdio.h>
 #include <ctype.h>
 
-void git_path_free(git_path *path)
+void git__path_free(git_path *path)
 {
 	assert(path);
-    if (path->data) {
-        git__free(path->data);
-    }
+	if (path->data) {
+		git__free(path->data);
+	}
 	path->data = NULL;
 	path->size = 0;
 }
 
-void git_path_expand(git_path *path, size_t newsize)
+int git__path_realloc(git_path *path, size_t newsize)
 {
 	assert(path);
 
@@ -30,35 +30,47 @@ void git_path_expand(git_path *path, size_t newsize)
 		path->data = git__malloc(newsize);
 		if (path->data) {
 			*(path->data) = '\0';
+			path->size = newsize;
+		} else {
+			path->size = 0;
+			return git__throw(GIT_ENOMEM, "Could not expand path to %d", (int)newsize);
 		}
-		path->size = newsize;
 	}
 	else if (path->size < newsize) {
 		path->data = git__realloc(path->data, newsize);
-		path->size = newsize;
+		if (path->data) {
+			path->size = newsize;
+		} else {
+			path->size = 0;
+			return git__throw(GIT_ENOMEM, "Could not expand path to %d", (int)newsize);
+		}
 	}
+
+	return GIT_SUCCESS;
 }
 
-void git_path_strncat(git_path *path, const char* str, size_t n)
+int git__path_strncat(git_path *path, const char* str, size_t n)
 {
 	assert(path);
 
+	int	   error = GIT_SUCCESS;
 	size_t old_size	 = path->data ? strlen(path->data) : 0;
 	size_t add_size	 = str ? strlen(str) : 0;
 	if (add_size > n) add_size = n;
 	size_t null_byte = (size_t)((path->data != NULL) || (str != NULL));
 	size_t new_size	 = old_size + add_size + null_byte;
 
-	if (path->size < new_size) {
-		git_path_expand(path, new_size);
-	}
+	if (path->size < new_size)
+		error = git__path_realloc(path, new_size);
 
-	if (add_size > 0) {
+	if (add_size > 0 && error == GIT_SUCCESS) {
 		memmove(path->data + old_size, str, add_size);
 
 		/* make sure to terminate new string */
 		*(path->data + old_size + add_size + 1) = '\0';
 	}
+
+	return error;
 }
 
 /*
@@ -66,7 +78,6 @@ void git_path_strncat(git_path *path, const char* str, size_t n)
  * Check http://android.git.kernel.org/
  */
 int git_path_basename_r(git_path *base_path, const char *path)
-/* int git_path_basename_r(char *buffer, size_t bufflen, const char *path) */
 {
 	const char *endp, *startp;
 	int len, result;
@@ -99,17 +110,22 @@ int git_path_basename_r(git_path *base_path, const char *path)
 
 Exit:
 	result = len;
+
 	if (base_path == NULL) {
 		return result;
 	}
+
 	if (len > (int)base_path->size - 1) {
-        git_path_expand(base_path, len + 1);
+		int error = git__path_realloc(base_path, len + 1);
+		if (error != GIT_SUCCESS)
+			return git__rethrow(error, "Could not get basename of '%s'", path);
 	}
 
 	if (len >= 0) {
 		memmove(base_path->data, startp, len);
 		base_path->data[len] = 0;
 	}
+
 	return result;
 }
 
@@ -163,30 +179,31 @@ int git_path_dirname_r(git_path* parent_path, const char *path)
 
 Exit:
 	result = len;
-	if (len+1 > GIT_PATH_MAX) {
-		return GIT_ENOMEM;
-	}
+
 	if (parent_path == NULL)
 		return result;
 
 	if (len > (int)parent_path->size - 1) {
-        git_path_expand(parent_path, len + 1);
+		int error = git__path_realloc(parent_path, len + 1);
+		if (error != GIT_SUCCESS)
+			return git__rethrow(error, "Could not get dirname of '%s'", path);
 	}
 
 	if (len >= 0) {
 		memmove(parent_path->data, path, len);
 		parent_path->data[len] = 0;
 	}
+
 	return result;
 }
 
 
 char *git_path_dirname(const char *path)
 {
-    git_path dname = GIT_PATH_INIT;
+	git_path dname = GIT_PATH_INIT;
 
 	if (git_path_dirname_r(&dname, path) < GIT_SUCCESS) {
-		git_path_free(&dname);
+		git__path_free(&dname);
 		return NULL;
 	}
 
@@ -195,10 +212,10 @@ char *git_path_dirname(const char *path)
 
 char *git_path_basename(const char *path)
 {
-    git_path bname = GIT_PATH_INIT;
+	git_path bname = GIT_PATH_INIT;
 
 	if (git_path_basename_r(&bname, path) < GIT_SUCCESS) {
-		git_path_free(&bname);
+		git__path_free(&bname);
 		return NULL;
 	}
 

@@ -297,7 +297,7 @@ static int remove_placeholders_recurs(void *filename, char *path)
 		error = p_unlink(path);
     }
 
-    git_path_free(&passed_path);
+    git__path_free(&passed_path);
 
 	return error;
 }

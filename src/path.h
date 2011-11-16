@@ -24,18 +24,19 @@ typedef struct { /* path buffer */
 /* the ability to prealloc a git_path is useful while transitioning code */
 #define GIT_PATH_INIT_N(N)		{(N)>0?git__calloc(N,1):NULL,N}
 
-extern void git_path_free(git_path *path);
-extern void git_path_expand(git_path *path, size_t newsize);
-extern void git_path_strncat(git_path *path, const char *str, size_t n);
+extern void git__path_free(git_path *path);
+extern int git__path_realloc(git_path *path, size_t newsize);
+extern int git__path_strncat(git_path *path, const char *str, size_t n);
+/* TODO: extern void git__path_append_n(git_path *path, int npath, ...); */
 
-GIT_INLINE(void) git_path_strcat(git_path *path, const char *str)
+GIT_INLINE(int) git__path_strcat(git_path *path, const char *str)
 {
-	git_path_strncat(path, str, UINT_MAX);
+	return git__path_strncat(path, str, UINT_MAX);
 }
 
-GIT_INLINE(void) git_path_append(git_path *tgt, const git_path *src)
+GIT_INLINE(int) git__path_append(git_path *tgt, const git_path *src)
 {
-	git_path_strcat(tgt, src->data);
+	return git__path_strncat(tgt, src->data, src->size);
 }
 
 /*
