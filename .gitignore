@@ -23,3 +23,5 @@ msvc/Release/
 CMake*
 *.cmake
 .DS_Store
+*~
+
