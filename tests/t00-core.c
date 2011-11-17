@@ -466,7 +466,7 @@ BEGIN_TEST(dirent4, "make sure that strange looking filenames ('..c') are traver
 END_TEST
 
 BEGIN_TEST(filebuf0, "make sure git_filebuf_open doesn't delete an existing lock")
-	git_filebuf file;
+	git_filebuf file = GIT_FILEBUF_INIT;
 	int fd;
 	char test[] = "test", testlock[] = "test.lock";
 
@@ -479,7 +479,7 @@ BEGIN_TEST(filebuf0, "make sure git_filebuf_open doesn't delete an existing lock
 END_TEST
 
 BEGIN_TEST(filebuf1, "make sure GIT_FILEBUF_APPEND works as expected")
-	git_filebuf file;
+	git_filebuf file = GIT_FILEBUF_INIT;
 	int fd;
 	char test[] = "test";
 
@@ -496,7 +496,7 @@ BEGIN_TEST(filebuf1, "make sure GIT_FILEBUF_APPEND works as expected")
 END_TEST
 
 BEGIN_TEST(filebuf2, "make sure git_filebuf_write writes large buffer correctly")
-	git_filebuf file;
+	git_filebuf file = GIT_FILEBUF_INIT;
 	char test[] = "test";
 	unsigned char buf[4096 * 4]; /* 2 * WRITE_BUFFER_SIZE */
 
