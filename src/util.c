@@ -15,6 +15,109 @@
 # include <Shlwapi.h>
 #endif
 
+#ifdef TEST_ALLOC
+#include "global.h"
+
+git_alloc_monitor_fn git__alloc_monitor(git_alloc_monitor_fn cb)
+{
+	git_alloc_monitor_fn old_cb = GIT_GLOBAL->alloc_cb;
+	GIT_GLOBAL->alloc_cb = cb;
+	return old_cb;
+}
+
+void *git___malloc(size_t size, const char *file, size_t line)
+{
+	void *ptr;
+
+	if (GIT_GLOBAL->alloc_cb &&
+		GIT_GLOBAL->alloc_cb(GIT_ALLOC_MALLOC, size, NULL, file, line) != GIT_SUCCESS)
+		ptr = NULL;
+	else
+		ptr = malloc(size);
+
+	if (!ptr)
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to allocate %d bytes.", (int)size);
+	else
+		memset(ptr, 0xc7, size); /* don't make assumptions about content */
+
+	return ptr;
+}
+
+void *git___calloc(size_t nelem, size_t elsize, const char *file, size_t line)
+{
+	void *ptr;
+
+	if (GIT_GLOBAL->alloc_cb &&
+		GIT_GLOBAL->alloc_cb(GIT_ALLOC_CALLOC, nelem * elsize, NULL, file, line) != GIT_SUCCESS)
+		ptr = NULL;
+	else
+		ptr = calloc(nelem, elsize);
+
+	if (!ptr)
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to allocate %d items of %d bytes.",
+			(int)nelem, (int)elsize);
+
+	return ptr;
+}
+
+char *git___strdup(const char *str, const char *file, size_t line)
+{
+	char *ptr;
+
+	if (GIT_GLOBAL->alloc_cb &&
+		GIT_GLOBAL->alloc_cb(GIT_ALLOC_STRDUP, 0, (void *)str, file, line) != GIT_SUCCESS)
+		ptr = NULL;
+	else
+		ptr = strdup(str);
+
+	if (!ptr)
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to duplicate string.");
+
+	return ptr;
+}
+
+void *git___realloc(void *ptr, size_t size, const char *file, size_t line)
+{
+	void *new_ptr;
+
+	if (GIT_GLOBAL->alloc_cb) {
+		int action = GIT_GLOBAL->alloc_cb(GIT_ALLOC_REALLOC, size, ptr, file, line);
+		if (action < 0)
+			new_ptr = NULL;
+		else if (action == 0)
+			new_ptr = realloc(ptr, size);
+		else {
+			/* succeed but force relocation */
+			new_ptr = malloc(size);
+			if (new_ptr && ptr) {
+				memcpy(new_ptr, ptr, size);
+				memset(ptr, 0, 1); /* try to "trash" old content */
+				free(ptr);
+			}
+		}
+	} else
+		new_ptr = realloc(ptr, size);
+
+	if (!new_ptr)
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to allocate %d bytes.", (int)size);
+
+	return new_ptr;
+}
+
+void  git___free(void *ptr, const char *file, size_t line)
+{
+	if (!ptr)
+		return;
+
+	if (!GIT_GLOBAL->alloc_cb ||
+		GIT_GLOBAL->alloc_cb(GIT_ALLOC_FREE, 0, ptr, file, line) == GIT_SUCCESS) {
+		memset(ptr, 0, 1); /* try to "trash" old content */
+		free(ptr);
+	}
+}
+
+#endif /* TEST_ALLOC */
+
 void git_libgit2_version(int *major, int *minor, int *rev)
 {
 	*major = LIBGIT2_VER_MAJOR;

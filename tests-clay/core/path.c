@@ -239,11 +239,28 @@ void test_core_path__7_path_to_dir(void)
 	check_string_to_dir("abcd", 6, "abcd/");
 }
 
+static int realloc_move(
+	int alloc_type, size_t GIT_UNUSED(size), void *GIT_UNUSED(ptr),
+	const char *GIT_UNUSED(file), size_t GIT_UNUSED(line))
+{
+	GIT_UNUSED_ARG(ptr);
+	GIT_UNUSED_ARG(size);
+	GIT_UNUSED_ARG(file);
+	GIT_UNUSED_ARG(line);
+
+	if (alloc_type == GIT_ALLOC_REALLOC)
+		return 1;
+	else
+		return 0;
+}
+
 /* join path to itself */
 void test_core_path__8_self_join(void)
 {
 	git_buf path = GIT_BUF_INIT;
 	ssize_t asize = 0;
+
+	git__alloc_monitor(realloc_move);
 
 	asize = path.asize;
 	cl_git_pass(git_buf_sets(&path, "/foo"));
@@ -270,6 +287,8 @@ void test_core_path__8_self_join(void)
 	cl_git_pass(git_buf_joinpath(&path, path.ptr + 4, "somethinglongenoughtorealloc"));
 	cl_assert_strequal(path.ptr, "/baz/somethinglongenoughtorealloc");
 	cl_assert(asize < path.asize);
-	
+
 	git_buf_free(&path);
+
+	git__alloc_monitor(NULL);
 }

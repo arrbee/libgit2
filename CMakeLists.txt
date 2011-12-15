@@ -64,7 +64,7 @@ IF (MSVC)
 	SET(CMAKE_C_FLAGS_RELEASE "/MT /O2")
 	SET(WIN_RC "src/win32/git2.rc")
 ELSE ()
-	SET(CMAKE_C_FLAGS "-O2 -g -Wall -Wextra -Wno-missing-field-initializers -Wstrict-aliasing=2 -Wstrict-prototypes -Wmissing-prototypes ${CMAKE_C_FLAGS}")
+	SET(CMAKE_C_FLAGS "-O2 -g -Wall -Wextra -Wno-missing-field-initializers -Wno-unused-value -Wstrict-aliasing=2 -Wstrict-prototypes -Wmissing-prototypes ${CMAKE_C_FLAGS}")
 	SET(CMAKE_C_FLAGS_DEBUG "-O0 -g")
 	IF (NOT MINGW) # MinGW always does PIC and complains if we tell it to
 		SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC")
@@ -144,6 +144,8 @@ ENDIF ()
 IF (BUILD_CLAY)
 	SET(CLAY_FIXTURES "${CMAKE_CURRENT_SOURCE_DIR}/tests/resources/")
 	ADD_DEFINITIONS(-DCLAY_FIXTURE_PATH=\"${CLAY_FIXTURES}\")
+
+	ADD_DEFINITIONS(-DTEST_ALLOC)
 
     INCLUDE_DIRECTORIES(tests-clay)
 	FILE(GLOB_RECURSE SRC_TEST tests-clay/*.c)
