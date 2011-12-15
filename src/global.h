@@ -15,6 +15,10 @@ typedef struct {
 	} error;
 
 	git_mwindow_ctl mem_ctl;
+
+#ifdef TEST_ALLOC
+	git_alloc_monitor_fn alloc_cb;
+#endif
 } git_global_st;
 
 git_global_st *git__global_state(void);

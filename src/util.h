@@ -14,6 +14,30 @@
 # define min(a,b) ((a) < (b) ? (a) : (b))
 #endif
 
+#ifdef TEST_ALLOC
+
+#define git__malloc(SZ)		git___malloc((SZ),__FILE__,__LINE__)
+#define git__calloc(N,SZ)	git___calloc((N),(SZ),__FILE__,__LINE__)
+#define git__strdup(STR)	git___strdup((STR),__FILE__,__LINE__)
+#define git__realloc(P,SZ)	git___realloc((P),(SZ),__FILE__,__LINE__)
+#define git__free(P)		git___free((P),__FILE__,__LINE__)
+extern void *git___malloc(size_t size, const char *file, size_t line);
+extern void *git___calloc(size_t nelem, size_t elsize, const char *file, size_t line);
+extern char *git___strdup(const char *ptr, const char *file, size_t line);
+extern void *git___realloc(void *ptr, size_t size, const char *file, size_t line);
+extern void  git___free(void *ptr, const char *file, size_t line);
+enum git_alloc_type {
+	GIT_ALLOC_MALLOC,
+	GIT_ALLOC_CALLOC,
+	GIT_ALLOC_STRDUP,
+	GIT_ALLOC_REALLOC,
+	GIT_ALLOC_FREE
+};
+typedef int (*git_alloc_monitor_fn)(
+	int alloc_type, size_t size, void *ptr, const char *file, size_t line);
+extern git_alloc_monitor_fn git__alloc_monitor(git_alloc_monitor_fn cb);
+#else
+
 /*
  * Custom memory allocation wrappers
  * that set error code and error message
@@ -31,7 +55,8 @@ GIT_INLINE(void *) git__calloc(size_t nelem, size_t elsize)
 {
 	void *ptr = calloc(nelem, elsize);
 	if (!ptr)
-		git__throw(GIT_ENOMEM, "Out of memory. Failed to allocate %d bytes.", (int)elsize);
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to allocate %d items of %d bytes.",
+			(int)nelem, (int)elsize);
 	return ptr;
 }
 
@@ -39,28 +64,7 @@ GIT_INLINE(char *) git__strdup(const char *str)
 {
 	char *ptr = strdup(str);
 	if (!ptr)
-		git__throw(GIT_ENOMEM, "Out of memory. Failed to duplicate string");
-	return ptr;
-}
-
-GIT_INLINE(char *) git__strndup(const char *str, size_t n)
-{
-	size_t length;
-	char *ptr;
-
-	length = strlen(str);
-	if (n < length)
-		length = n;
-
-	ptr = (char*)malloc(length + 1);
-	if (!ptr) {
-		git__throw(GIT_ENOMEM, "Out of memory. Failed to duplicate string");
-		return NULL;
-	}
-
-	memcpy(ptr, str, length);
-	ptr[length] = '\0';
-
+		git__throw(GIT_ENOMEM, "Out of memory. Failed to duplicate string.");
 	return ptr;
 }
 
@@ -73,6 +77,29 @@ GIT_INLINE(void *) git__realloc(void *ptr, size_t size)
 }
 
 #define git__free(ptr) free(ptr)
+
+#endif
+
+GIT_INLINE(char *) git__strndup(const char *str, size_t n)
+{
+	size_t length;
+	char *ptr;
+
+	length = strlen(str);
+	if (n < length)
+		length = n;
+
+	ptr = (char*)git__malloc(length + 1);
+	if (!ptr) {
+		git__rethrow(GIT_ENOMEM, "Out of memory. Failed to duplicate string.");
+		return NULL;
+	}
+
+	memcpy(ptr, str, length);
+	ptr[length] = '\0';
+
+	return ptr;
+}
 
 extern int git__prefixcmp(const char *str, const char *prefix);
 extern int git__suffixcmp(const char *str, const char *suffix);
