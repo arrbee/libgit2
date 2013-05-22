@@ -1245,3 +1245,103 @@ void test_diff_workdir__untracked_directory_comes_last(void)
 
 	git_diff_list_free(diff);
 }
+
+static int diff_print_to_buf(
+	const git_diff_delta *delta,
+	const git_diff_range *range,
+	char line_origin,
+	const char *content,
+	size_t content_len,
+	void *payload)
+{
+	git_buf *buf = payload;
+	GIT_UNUSED(delta); GIT_UNUSED(range); GIT_UNUSED(line_origin);
+	git_buf_printf(buf, "%.*s", (int)content_len, content);
+	return 0;
+}
+
+void test_diff_workdir__untracked_content(void)
+{
+	git_diff_options opts = GIT_DIFF_OPTIONS_INIT;
+	git_diff_list *diff = NULL;
+	git_buf patch = GIT_BUF_INIT;
+
+	g_repo = cl_git_sandbox_init("empty_standard_repo");
+
+	opts.context_lines = 3;
+	opts.interhunk_lines = 1;
+	opts.flags |= GIT_DIFF_INCLUDE_IGNORED | GIT_DIFF_INCLUDE_UNTRACKED |
+		GIT_DIFF_INCLUDE_UNTRACKED_CONTENT | GIT_DIFF_RECURSE_UNTRACKED_DIRS;
+
+	/* initial empty diff */
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_assert(diff != NULL);
+
+	git_buf_clear(&patch);
+	cl_git_pass(git_diff_print_patch(diff, diff_print_to_buf, &patch));
+	cl_assert_equal_s("", patch.ptr);
+
+	git_diff_list_free(diff);
+
+	/* diff with untracked file (in root) */
+
+	cl_git_mkfile("empty_standard_repo/one", "untracked one\n");
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_assert(diff != NULL);
+
+	git_buf_clear(&patch);
+	cl_git_pass(git_diff_print_patch(diff, diff_print_to_buf, &patch));
+	cl_assert_equal_s("diff --git a/one b/one\nnew file mode 100644\nindex 0000000..4659f5c\n--- /dev/null\n+++ b/one\n@@ -0,0 +1 @@\n+untracked one\n", patch.ptr);
+
+	git_diff_list_free(diff);
+
+	/* diff with untracked file (in untracked dir) */
+
+	p_unlink("empty_standard_repo/one");
+	p_mkdir("empty_standard_repo/dir", 0777);
+	cl_git_mkfile("empty_standard_repo/dir/two", "untracked two\n");
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_assert(diff != NULL);
+
+	git_buf_clear(&patch);
+	cl_git_pass(git_diff_print_patch(diff, diff_print_to_buf, &patch));
+	cl_assert_equal_s("diff --git a/dir/two b/dir/two\nnew file mode 100644\nindex 0000000..b6eeba5\n--- /dev/null\n+++ b/dir/two\n@@ -0,0 +1 @@\n+untracked two\n", patch.ptr);
+
+	git_diff_list_free(diff);
+
+	/* diff with unmodified tracked file */
+
+	{
+		git_index *index;
+		cl_git_pass(git_repository_index(&index, g_repo));
+		cl_git_pass(git_index_add_bypath(index, "dir/two"));
+		git_index_free(index);
+	}
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_assert(diff != NULL);
+
+	git_buf_clear(&patch);
+	cl_git_pass(git_diff_print_patch(diff, diff_print_to_buf, &patch));
+	cl_assert_equal_s("", patch.ptr);
+
+	git_diff_list_free(diff);
+
+	/* diff with untracked file (in tracked dir) */
+
+	cl_git_mkfile("empty_standard_repo/dir/three", "untracked three\n");
+
+	cl_git_pass(git_diff_index_to_workdir(&diff, g_repo, NULL, &opts));
+	cl_assert(diff != NULL);
+
+	git_buf_clear(&patch);
+	cl_git_pass(git_diff_print_patch(diff, diff_print_to_buf, &patch));
+	cl_assert_equal_s("diff --git a/dir/three b/dir/three\nnew file mode 100644\nindex 0000000..054a973\n--- /dev/null\n+++ b/dir/three\n@@ -0,0 +1 @@\n+untracked three\n", patch.ptr);
+
+	git_diff_list_free(diff);
+
+	git_buf_free(&patch);
+}
