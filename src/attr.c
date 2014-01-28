@@ -51,8 +51,9 @@ int git_attr_get(
 
 	*value = NULL;
 
-	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo)) < 0)
-		return -1;
+	if ((error = git_attr_path__init(
+			&path, pathname, git_repository_workdir(repo))) < 0)
+		return error;
 
 	if ((error = collect_attr_files(repo, flags, pathname, &files)) < 0)
 		goto cleanup;
@@ -103,10 +104,14 @@ int git_attr_get_many(
 	attr_get_many_info *info = NULL;
 	size_t num_found = 0;
 
-	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo)) < 0)
-		return -1;
+	if (!num_attr)
+		return 0;
 
-	if ((error = collect_attr_files(repo, flags, pathname, &files)) < 0)
+	assert(values && repo && names);
+
+	if ((error = git_attr_path__init(
+			&path, pathname, git_repository_workdir(repo))) < 0 ||
+		(error = collect_attr_files(repo, flags, pathname, &files)) < 0)
 		goto cleanup;
 
 	info = git__calloc(num_attr, sizeof(attr_get_many_info));
@@ -139,12 +144,15 @@ int git_attr_get_many(
 		}
 	}
 
-	for (k = 0; k < num_attr; k++) {
-		if (!info[k].found)
+cleanup:
+	/* set values[] entries to NULL for items not found */
+	for (k = 0; k < num_attr && num_found < num_attr; k++) {
+		if (!info || !info[k].found) {
 			values[k] = NULL;
+			num_found++;
+		}
 	}
 
-cleanup:
 	git_vector_free(&files);
 	git_attr_path__free(&path);
 	git__free(info);
@@ -169,8 +177,11 @@ int git_attr_foreach(
 	git_attr_assignment *assign;
 	git_strmap *seen = NULL;
 
-	if (git_attr_path__init(&path, pathname, git_repository_workdir(repo)) < 0)
-		return -1;
+	assert(repo && callback);
+
+	if ((error = git_attr_path__init(
+			&path, pathname, git_repository_workdir(repo))) < 0)
+		return error;
 
 	if ((error = collect_attr_files(repo, flags, pathname, &files)) < 0)
 		goto cleanup;
@@ -218,8 +229,10 @@ int git_attr_add_macro(
 	git_attr_rule *macro = NULL;
 	git_pool *pool;
 
-	if (git_attr_cache__init(repo) < 0)
-		return -1;
+	assert(repo && name && values);
+
+	if ((error = git_attr_cache__init(repo)) < 0)
+		return error;
 
 	macro = git__calloc(1, sizeof(git_attr_rule));
 	GITERR_CHECK_ALLOC(macro);
@@ -638,8 +651,8 @@ int git_attr_cache__init(git_repository *repo)
 		return 0;
 
 	/* cache config settings for attributes and ignores */
-	if (git_repository_config__weakptr(&cfg, repo) < 0)
-		return -1;
+	if ((ret = git_repository_config__weakptr(&cfg, repo)) < 0)
+		return ret;
 
 	ret = attr_cache__lookup_path(
 		&cache->cfg_attr_file, cfg, GIT_ATTR_CONFIG, GIT_ATTR_FILE_XDG);

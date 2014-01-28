@@ -263,11 +263,11 @@ git_attr_assignment *git_attr_rule__lookup_assignment(
 int git_attr_path__init(
 	git_attr_path *info, const char *path, const char *base)
 {
-	ssize_t root;
+	ssize_t root = 0;
+
+	memset(info, 0, sizeof(*info));
 
 	/* build full path as best we can */
-	git_buf_init(&info->full, 0);
-
 	if (git_path_join_unrooted(&info->full, path, base, &root) < 0)
 		return -1;
 
